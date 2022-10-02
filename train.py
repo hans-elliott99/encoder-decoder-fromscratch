@@ -6,8 +6,8 @@ import pickle
 import torch
 
 
-from model import TranslGRU
-from data import import_data, words_to_word_data, words_to_ch_data
+from enc_dec.model import TranslGRU
+from enc_dec.data import import_data, words_to_word_data, words_to_ch_data
 
 
 MAX_CHARS = 30
@@ -16,12 +16,22 @@ STOP_CHR = '<'
 KEEP_PUNCT = "'-"
 N_SAMPLES = 1000
 
+SAVE_MODEL=True
+SAVE_GRADS=True
+
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(f"device = ", device)
 
-def importPrepDicts(data_path, level="word"):
 
+def importPrepDicts(data_path, level="word"):
+    """
+    Import data and use it to prepare dictionaries mapping the character/word encodings\n
+    path to data -> english phrases (list), french phrases (list), stoi (dict), itos (dict)
+
+    data_path -- path to text file\n
+    level -- level at which to break down data. either "word" or "character".\n
+    """
     english, french = import_data(data_path,
                                 max_english_chars=MAX_CHARS, max_french_chars=MAX_CHARS)
     
@@ -51,12 +61,14 @@ def importPrepDicts(data_path, level="word"):
 
 
 def train(hidden_size, enc_embedding_dim, dec_embedding_dim, max_length=100, teacher_forcing=0.0, lr=3e-4, epochs=10, print_every=1):
+    """Main: Pull in data and train model for desired epochs. Saves epoch-loss to log file and pickles final weight tensors."""
     # IMPORT AND PREP DATA
     english, french, stoi, itos = importPrepDicts("./data/eng-fra.txt", level="word")
+    
     Xs, Ys = words_to_word_data(english[:N_SAMPLES], french[:N_SAMPLES], 
-                            stoi, stop_char=STOP_CHR, 
-                            device=device,
-                            keep_punct=KEEP_PUNCT)
+                                stoi, stop_char=STOP_CHR, 
+                                device=device,
+                                keep_punct=KEEP_PUNCT)
 
     n_words = len(stoi)
 
@@ -72,11 +84,11 @@ def train(hidden_size, enc_embedding_dim, dec_embedding_dim, max_length=100, tea
                     )
     model.init_weights(device=device)
 
-    # PRINT MODEL
+    # PRINT MODEL 
     for n, p in zip(model.param_names, model.params):
-        print(f"| {n}  | {p.shape[0], p.shape[1]} | n =  {p.nelement():,} | {p.device}")
+        print(f"| {n}  | shape = {p.shape[0], p.shape[1]} | params =  {p.nelement():,} | {p.device}")
 
-    print("\n total params:", model.n_parameters)
+    print(f"\ntotal params: {model.n_parameters:,}")
 
     
     # TRAINING LOOP
@@ -105,18 +117,18 @@ def train(hidden_size, enc_embedding_dim, dec_embedding_dim, max_length=100, tea
             ep_loss += loss.item()
 
             model.backprop_update(optimizer)
-        
+        et = time.time() ##elapsed time
+
         # write epoch loss to log
         with open(log_file, 'a') as f:
-            f.write(f'epoch {epoch}; loss {ep_loss / N_SAMPLES} \n')
+            f.write(f'epoch {epoch} (et {round(et-strt, 3)}s); loss {ep_loss / N_SAMPLES} \n')
 
         # print
         if epoch % print_every == 0:
-            stp = time.time()
             guess, true = model.decode_output(output, label=y, spaces=True) ##use the last training sample as an example
 
             print(f"({epoch}/{epochs}) loss = {round(ep_loss/N_SAMPLES, 6)}", end=" ")
-            print(f"(elapsed: {round(stp-strt, 3)}s)")
+            print(f"(et: {round(et-strt, 3)}s)")
             print("GUESS:", guess, end="   ")
             print("TRUTH:", true, end="   ")
             print("ENG:", ' '.join([itos[i.item()] for i in x]))
@@ -128,9 +140,29 @@ def train(hidden_size, enc_embedding_dim, dec_embedding_dim, max_length=100, tea
 
 
 if __name__=='__main__':
-    model = train(hidden_size=128, enc_embedding_dim=64, dec_embedding_dim=64, 
-                    max_length=100, teacher_forcing=0.25, lr=3e-4, 
-                    epochs=10, print_every=1)
+    # argparse...
+    model = train(hidden_size=64, 
+                  enc_embedding_dim=64, dec_embedding_dim=64, 
+                  max_length=100,
+                  teacher_forcing=0.25, lr=3e-4,
+                  epochs=10, 
+                  print_every=1)
 
-    with open('./data/weights/pkl', 'wb') as f:
-        pickle.dump(model.params, f)
+
+    if SAVE_MODEL:
+        final_model = dict(  names = model.param_names, 
+                             weights = [p.cpu() for p in model.params],
+                             config = {'vocab_size': model.input_size, 
+                                       'enc_embed_dim': model.enc_embed_dim, 
+                                       'dec_embed_dim': model.dec_embed_dim,
+                                       'dec_type' : model.dec_type,
+                                       'hidden_size' : model.enc_hidden_size, 
+                                       'max_length' : model.max_length,
+                                       'stoi' : model.stoi, 'start_chr' : START_CHR, 'stop_chr' : STOP_CHR
+                                       }
+                             )
+        if SAVE_GRADS:
+            final_model.update(grads = [p.grad.cpu() for p in model.params])
+
+        with open('./data/saved_model.pkl', 'wb') as f:
+            pickle.dump(final_model, f)
