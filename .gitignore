@@ -1,2 +1,4 @@
 __pycache__
-#*.pkl
+dev.ipynb
+data/*.pkl
+data/saved_model.pkl

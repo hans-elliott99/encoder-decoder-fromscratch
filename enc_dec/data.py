@@ -1,4 +1,5 @@
 # Text preprocessing
+from pickle import NONE
 import string
 import random
 
@@ -6,7 +7,7 @@ import random
 import torch
 
 
-def import_data(file_path, max_english_chars, max_french_chars):
+def import_data(file_path, max_english_chars, max_french_chars, n_samples=None):
     english, french = [],[]
 
     matches = ["(", "‽", "…", "€"]
@@ -36,41 +37,61 @@ def import_data(file_path, max_english_chars, max_french_chars):
             else:
                 english.append(eng)
                 french.append(fra)
+            if n_samples is not None: ##check if we should keep adding
+                if len(english) == n_samples:
+                    break
+
     return english, french
 
 
-def words_to_ch_data(eng, fra, stoi, stop_char:str, device):
+def words_to_ch_data(eng, fra, stoi, stop_char:str, max_Xs:int, max_Ys:int, device):
     """
     Converts words to character-level data.
     """
     assert len(eng)==len(fra)
+    max_Xs = len(max(eng, key=len))
+    max_Ys = len(max(fra, key=len))
     # Data
     ## block_size = context length: how many chars do we use to predict the next?
     X, Y = [], []
     for en, fr in zip(eng, fra):
+
+        add_to_en = max_Xs-len(en) ##pad to even length
+        add_to_fr = max_Ys-len(fr)
+
         english_ix, french_ix = [], []
         for ch in en:
             english_ix.append(stoi[ch])
         english_ix.append(stoi[stop_char])
-        # english_ix += [stoi[stop_char]] * add_to_en
+        english_ix += [stoi[stop_char]] * add_to_en
 
         for ch in fr:
             french_ix.append(stoi[ch])
         french_ix.append(stoi[stop_char])
-        # french_ix += [stoi[stop_char]] * add_to_fr
+        french_ix += [stoi[stop_char]] * add_to_fr
 
-        X.append(torch.tensor(english_ix, device=device))
-        Y.append(torch.tensor(french_ix, device=device))
+        X.append(english_ix)
+        Y.append(french_ix)
 
-    return X, Y
+    return torch.tensor(X, device=device), torch.tensor(Y, device=device)
 
 
 def words_to_word_data(eng, fra, stoi, stop_char:str, device, keep_punct=""):
     """
     Converts words to word-level data.
     """
-    assert len(eng)==len(fra)
+    assert len(eng)==len(fra), f"len(eng) {len(eng)} != len(fra) {len(fra)}"
+
+    #unpack stoi dict
+    assert len(stoi.keys()) == 2, "the stoi_mapping dict must contain 2 dictionaries, the first for english words and the second for french."
+    en_stoi = stoi[[k for k in stoi.keys()][0]]
+    fr_stoi = stoi[[k for k in stoi.keys()][1]] 
+
+    #prep
     remove_punct = ''.join([p for p in string.punctuation if p not in keep_punct]) ##remove all punct except...
+    max_Xs = len(max([e.split() for e in eng], key=len)) ##longest english phrase
+    max_Ys = len(max([f.split() for f in fra], key=len)) ##longest french phrase
+
     # Data
     X, Y = [], []
     for en, fr in zip(eng, fra):
@@ -78,25 +99,34 @@ def words_to_word_data(eng, fra, stoi, stop_char:str, device, keep_punct=""):
         en = ''.join([c for c in en if c not in remove_punct]).lower()
         fr = ''.join([c for c in fr if c not in remove_punct]).lower()
 
+        # determine padding for equal length tensors
+        add_to_en = max_Xs-len(en.split()) ##pad to even length
+        add_to_fr = max_Ys-len(fr.split())
+
         # split phrases into words
         english_ix, french_ix = [], []
         for wd in en.split():
-            english_ix.append(stoi[wd])
-        english_ix.append(stoi[stop_char])
+            english_ix.append(en_stoi[wd])
+        english_ix.append(en_stoi[stop_char])
+        english_ix += [en_stoi[stop_char]] * add_to_en
 
         for wd in fr.split():
-            french_ix.append(stoi[wd])
-        french_ix.append(stoi[stop_char])
+            french_ix.append(fr_stoi[wd])
+        french_ix.append(fr_stoi[stop_char])
+        french_ix += [fr_stoi[stop_char]] * add_to_fr
 
-        X.append(torch.tensor(english_ix, device=device))
-        Y.append(torch.tensor(french_ix, device=device))
+        X.append(english_ix)
+        Y.append(french_ix)
 
-    return X, Y
+    return torch.tensor(X, device=device), torch.tensor(Y, device=device)
 
 
 
 def split_samples(inputs, labels, frac=0.8, seed=123):
-    "Split x and y tensors (inputs and labels) into train and test sets"
+    """
+    Split x and y tensors (inputs and labels) into train and test sets\n
+    returns train_x, train_y, test_x, test_y
+    """
     
     assert len(inputs)==len(labels), f"len(inputs) {len(inputs)} does not match len(labels) {len(labels)}"
     # generate a list of indices to exclude. Turn in into a set for O(1) lookup time
