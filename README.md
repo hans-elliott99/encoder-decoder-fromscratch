@@ -1,7 +1,5 @@
 # encoder-decoder-fromscratch
-Sequence 2 sequence translation in pytorch from 'scratch' (at the torch.tensor level)    
+Sequence 2 sequence translation 'from scratch' (at the torch.tensor level).    
 
-model is an encoder GRU -> decoder GRU with attention.  
-data is for english to french translation.  
-
-see [notebook](https://github.com/hans-elliott99/encoder-decoder-fromscratch/blob/main/examples/Seq2Seq_EN2FRTranslation.ipynb) in examples/ for example (colab avail)  
+Model: encoder (GRU) -> decoder (GRU) with 'Bahdanau' attention. Inspired by the Bahdanau et al. 2014.  
+Data: for english to french translation. Provided in data/  
