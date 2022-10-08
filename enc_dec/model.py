@@ -107,7 +107,7 @@ class TranslGRU:
         """Initialize weight tensors for the encoder."""
         concat_size = self.enc_embed_dim + self.enc_hidden_size
 
-        self.enc_embed = torch.randn((self.input_size, self.enc_embed_dim), generator=g, device=device) * 0.1
+        self.enc_embed = torch.rand((self.input_size, self.enc_embed_dim), generator=g, device=device)
 
         self.enc_W_reset = torch.randn((self.enc_hidden_size, concat_size), generator=g, device=device) * 1/concat_size**0.5 ##sigmoid
         self.enc_br = torch.randn((self.enc_hidden_size, 1), device=device) * 1/concat_size**0.5
@@ -132,7 +132,7 @@ class TranslGRU:
             self.dec_params = [self.W_att, self.ba, self.W_rel, self.brel]
             self.dec_param_names = ['dec_W_att', 'dec_bias_a', 'dec_W_rel', 'dec_bias_rel']
 
-        self.dec_embed = torch.randn((self.output_size, self.dec_embed_dim), generator=g, device=device) * 0.1
+        self.dec_embed = torch.rand((self.output_size, self.dec_embed_dim), generator=g, device=device)
         self.dec_W_reset = torch.randn((self.dec_hidden_size, concat_size), generator=g, device=device) * 1/concat_size**0.5 ##sigmoid
         self.dec_br = torch.randn((self.dec_hidden_size, 1), device=device) * 1/concat_size**0.5
         self.dec_W_update = torch.randn((self.dec_hidden_size, concat_size), generator=g, device=device) * 1/concat_size**0.5 ##sigmoid

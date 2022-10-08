@@ -17,7 +17,8 @@ SAVE_GRADS=True
 SAVE_UTILS=True
 
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+#device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cpu")
 print(f"device = ", device)
 
 
@@ -186,7 +187,7 @@ if __name__=='__main__':
                             enc_lr=3e-2,
                             dec_lr=3e-3,
                             teacher_forcing=0.5,
-                            epochs=5, 
+                            epochs=15, 
                             print_every=1,
                             valid_data=(Xval,Yval))
 
